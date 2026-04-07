@@ -40,9 +40,22 @@ def search():
         file_response = requests.get(download_link)
         df = pd.read_excel(BytesIO(file_response.content), sheet_name=SHEET_NAME)
 
-        # Выведем структуру таблицы для диагностики
+        # Выведем подробную информацию о таблице для диагностики
+        logging.info(f"Список всех столбцов: {df.columns.values}")
         logging.info(f"Тип данных в столбце {ID_COLUMN}: {df[ID_COLUMN].dtype}")
-        logging.info(f"Первые 5 строк столбца {ID_COLUMN}:\n{df[ID_COLUMN].head()}")
+        logging.info(f"Первые 10 строк столбца {ID_COLUMN}:\n{df[ID_COLUMN].head(10)}")
+
+        # Проверим, есть ли NaN-значения
+        nan_values = df[ID_COLUMN].isnull().sum()
+        logging.info(f"Количество NaN-значений в столбце {ID_COLUMN}: {nan_values}")
+
+        # Проверим, есть ли пустые строки
+        empty_strings = df[ID_COLUMN].apply(lambda x: x.strip() == "").sum()
+        logging.info(f"Количество пустых строк в столбце {ID_COLUMN}: {empty_strings}")
+
+        # Обрабатываем NaN-значения и пустые строки
+        df[ID_COLUMN].fillna("", inplace=True)  # Заменяем NaN на пустые строки
+        df[ID_COLUMN] = df[ID_COLUMN].replace(r'^(\s*)$', "", regex=True)  # Убираем пустые строки
 
         # Ищем ID в нужном столбце
         logging.info(f"Поиск значения '{id_to_find}' в столбце {ID_COLUMN}...")
