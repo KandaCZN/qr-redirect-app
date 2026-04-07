@@ -1,5 +1,5 @@
-# Образ с Python 3.11 и старым GCC
-FROM python:3.11-bookworm
+# Базовый образ с Python 3.11
+FROM python:3.11-slim-bullseye
 
 # Рабочая директория
 WORKDIR /app
@@ -8,7 +8,8 @@ WORKDIR /app
 COPY . /app
 
 # Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --only-binary=pandas pandas
 
 # Экспонируем порт
 EXPOSE 8080
