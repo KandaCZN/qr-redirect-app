@@ -1,5 +1,5 @@
-# Базовый образ с Python 3.11
-FROM python:3.11-slim-bullseye
+# Образ с Python 3.11 и старым GCC
+FROM python:3.11-bookworm
 
 # Рабочая директория
 WORKDIR /app
