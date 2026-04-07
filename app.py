@@ -3,6 +3,10 @@ import requests
 import pandas as pd
 import os
 from io import BytesIO
+import logging  # Импортируем модуль логирования
+
+# Настраиваем логирование
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
@@ -12,44 +16,47 @@ YANDEX_TOKEN = os.environ.get("YANDEX_TOKEN")
 FILE_KEY = os.environ.get("FILE_KEY")  # Ключ файла (из ссылки)
 SHEET_NAME = os.environ.get("SHEET_NAME", "Sheet1")  # Имя листа
 ID_COLUMN = os.environ.get("ID_COLUMN", "C")  # Столбец для поиска (C)
+BASE_YANDEX_URL = f"https://disk.yandex.ru/i/{FILE_KEY}"  # Базовая ссылка на файл
 # ------------------
 
 @app.route('/search')
 def search():
+    logging.info("Начало обработки запроса")  # Логируем начало
+
     id_to_find = request.args.get('id')
     if not id_to_find:
         return "Ошибка: Не указан параметр ?id=..."
 
     try:
-        # 1. Сначала получаем ссылку на скачивание файла
-        public_url = f"https://disk.yandex.ru/i/{FILE_KEY}"
-        api_url = f"https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key={public_url}"
+        # Скачиваем файл с Яндекс.Диска
+        logging.info("Начинаем скачивание файла...")
+        download_url = f"https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key={BASE_YANDEX_URL}"
         headers = {"Authorization": f"OAuth {YANDEX_TOKEN}"}
+        response = requests.get(download_url, headers=headers)
+        download_link = response.json().get("href")
 
-        # Запрашиваем ссылку на скачивание
-        response = requests.get(api_url, headers=headers)
-        response.raise_for_status()  # Проверим, нет ли ошибок HTTP
-
-        # Извлекаем ссылку на скачивание
-        download_url = response.json().get("href")
-
-        # 2. Скачиваем файл в память
-        file_response = requests.get(download_url)
+        # Читаем файл в память
+        logging.info("Читаем файл в память...")
+        file_response = requests.get(download_link)
         df = pd.read_excel(BytesIO(file_response.content), sheet_name=SHEET_NAME)
 
-        # 3. Ищем ID в нужном столбце
-        # Приводим оба значения к одному типу и убираем пробелы для точности
+        # Выведем структуру таблицы для диагностики
+        logging.info(f"Тип данных в столбце {ID_COLUMN}: {df[ID_COLUMN].dtype}")
+        logging.info(f"Первые 5 строк столбца {ID_COLUMN}:\n{df[ID_COLUMN].head()}")
+
+        # Ищем ID в нужном столбце
+        logging.info(f"Поиск значения '{id_to_find}' в столбце {ID_COLUMN}...")
         mask = df[ID_COLUMN].astype(str).str.strip() == str(id_to_find).strip()
 
         if mask.any():  # Если нашли хотя бы одну строку
             # Находим первую подходящую строку
             row_index = df[mask].index[0]
-            row_number = row_index + 1  # Нумерация строк в Excel начинается с 1
+            row_number = row_index + 1
 
-            # 4. Формируем ссылку на ячейку
+            # Формируем ссылку на ячейку
             final_url = f"https://disk.yandex.ru/i/{FILE_KEY}#cell:{SHEET_NAME}!{ID_COLUMN}{row_number}"
 
-            # 5. Генерируем HTML-страницу с редиректом
+            # Генерируем HTML-страницу с редиректом
             html = f"""
             <html>
               <head><meta http-equiv="refresh" content="0; url={final_url}" /></head>
@@ -68,8 +75,10 @@ def search():
         return f"Объект №{id_to_find} не найден в столбце {ID_COLUMN}."
 
     except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при обращении к API: {str(e)}")
         return f"Произошла ошибка при обращении к API: {str(e)}"
     except Exception as e:
+        logging.error(f"Внутренняя ошибка: {str(e)}")
         return f"Произошла внутренняя ошибка: {str(e)}"
 
 if __name__ == '__main__':
